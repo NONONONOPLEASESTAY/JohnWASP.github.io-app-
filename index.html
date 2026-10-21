@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Drawing Board</title>
+    <style>
+      :root {
+        --bg: #f3f6fb;
+        --panel: #ffffff;
+        --panel-border: #dfe7f3;
+        --text: #1e293b;
+        --muted: #64748b;
+        --primary: #2563eb;
+        --shadow: rgba(15, 23, 42, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        font-family: Arial, Helvetica, sans-serif;
+        background: linear-gradient(135deg, #edf4ff 0%, #eef2ff 100%);
+        color: var(--text);
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .app {
+        width: min(1100px, 100%);
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 18px;
+        box-shadow: 0 20px 60px var(--shadow);
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--panel-border);
+        background: rgba(255,255,255,0.9);
+      }
+
+      .group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      input[type="color"] {
+        width: 46px;
+        height: 38px;
+        border: none;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      input[type="range"] {
+        width: 160px;
+        accent-color: var(--primary);
+      }
+
+      button {
+        appearance: none;
+        border: none;
+        background: var(--primary);
+        color: white;
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, opacity 0.15s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      button.secondary {
+        background: #e2e8f0;
+        color: var(--text);
+      }
+
+      .canvas-wrap {
+        padding: 18px;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 72vh;
+        min-height: 420px;
+        background: white;
+        border-radius: 14px;
+        border: 1px solid #dfe7f3;
+        box-shadow: inset 0 0 0 1px rgba(148,163,184,0.2);
+        cursor: crosshair;
+      }
+
+      @media (max-width: 640px) {
+        body { padding: 12px; }
+        .toolbar { padding: 14px; }
+        .group { width: 100%; justify-content: space-between; }
+        canvas { min-height: 300px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="toolbar">
+        <div class="group">
+          <label for="colorPicker">Color</label>
+          <input id="colorPicker" type="color" value="#1f2937" />
+        </div>
+
+        <div class="group">
+          <label for="sizeRange">Brush</label>
+          <input id="sizeRange" type="range" min="1" max="30" value="6" />
+          <span id="sizeValue">6px</span>
+        </div>
+
+        <div class="group">
+          <button id="eraserBtn" class="secondary" type="button">Eraser</button>
+          <button id="clearBtn" class="secondary" type="button">Clear</button>
+          <button id="saveBtn" type="button">Save PNG</button>
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="drawingCanvas" width="1100" height="700"></canvas>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById('drawingCanvas');
+      const ctx = canvas.getContext('2d');
+      const colorPicker = document.getElementById('colorPicker');
+      const sizeRange = document.getElementById('sizeRange');
+      const sizeValue = document.getElementById('sizeValue');
+      const clearBtn = document.getElementById('clearBtn');
+      const eraserBtn = document.getElementById('eraserBtn');
+      const saveBtn = document.getElementById('saveBtn');
+
+      let drawing = false;
+      let erasing = false;
+      let lastX = 0;
+      let lastY = 0;
+
+      function setCanvasSize() {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(300, rect.width);
+        const height = Math.max(300, rect.height);
+
+        const oldData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        canvas.width = width * ratio;
+        canvas.height = height * ratio;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.imageSmoothingEnabled = true;
+
+        if (oldData && oldData.data.length) {
+          ctx.putImageData(oldData, 0, 0);
+        }
+      }
+
+      function getPointerPosition(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top
+        };
+      }
+
+      function beginDraw(event) {
+        const pos = getPointerPosition(event);
+        drawing = true;
+        lastX = pos.x;
+        lastY = pos.y;
+      }
+
+      function draw(event) {
+        if (!drawing) return;
+
+        const pos = getPointerPosition(event);
+        ctx.lineWidth = Number(sizeRange.value);
+        ctx.strokeStyle = erasing ? '#ffffff' : colorPicker.value;
+
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+
+        lastX = pos.x;
+        lastY = pos.y;
+      }
+
+      function stopDraw() {
+        drawing = false;
+      }
+
+      sizeRange.addEventListener('input', () => {
+        sizeValue.textContent = `${sizeRange.value}px`;
+      });
+
+      clearBtn.addEventListener('click', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      });
+
+      eraserBtn.addEventListener('click', () => {
+        erasing = !erasing;
+        eraserBtn.textContent = erasing ? 'Brush' : 'Eraser';
+        eraserBtn.style.background = erasing ? '#1e293b' : '#e2e8f0';
+        eraserBtn.style.color = erasing ? '#fff' : '#1e293b';
+      });
+
+      saveBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = 'drawing-board.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+
+      canvas.addEventListener('pointerdown', (event) => {
+        canvas.setPointerCapture(event.pointerId);
+        beginDraw(event);
+      });
+
+      canvas.addEventListener('pointermove', draw);
+      canvas.addEventListener('pointerup', stopDraw);
+      canvas.addEventListener('pointerleave', stopDraw);
+      canvas.addEventListener('pointercancel', stopDraw);
+
+      window.addEventListener('resize', () => {
+        setCanvasSize();
+      });
+
+      function initializeCanvas() {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        sizeValue.textContent = `${sizeRange.value}px`;
+      }
+
+      setCanvasSize();
+      initializeCanvas();
+    </script>
+  </body>
+</html>
